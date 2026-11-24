@@ -1,0 +1,23 @@
+flowchart TD
+    query["User query + session_id"] --> entry["Agent entry<br/>Restore checkpoint and append HumanMessage"]
+    entry --> budget{"Six tool rounds already completed?"}
+    budget -->|"No"| reasoning["LLM reasoning / synthesis<br/>Read history and available tool schemas"]
+    reasoning --> decision{"Model returned tool_calls?"}
+    decision -->|"No"| final["Final assistant response"]
+    decision -->|"Yes"| selection["Tool selection<br/>Name and JSON arguments from model"]
+    selection --> node["ToolNode dispatch<br/>One result per tool_call_id"]
+    node --> rpcRequest["MCP client: tools/call"]
+    rpcRequest --> server["Selected MCP server executes tool"]
+    server --> result{"Response valid and successful?"}
+    result -->|"Yes"| success["ToolMessage containing actual result"]
+    result -->|"Tool execution or schema error"| failure["Sanitized error ToolMessage"]
+    rpcRequest -->|"Transport failure or timeout"| failure
+    success --> merge["Append results to AgentState.messages"]
+    failure --> merge
+    merge --> budget
+    budget -->|"Yes"| limit["Return tool-call limit message"]
+    reasoning -->|"Model request fails"| fallback["Return model-unavailable message"]
+    final --> saved["Save state through InMemorySaver"]
+    limit --> saved
+    fallback --> saved
+    saved --> response["HTTP response: response + session_id"]

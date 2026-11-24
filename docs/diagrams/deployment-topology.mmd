@@ -1,0 +1,36 @@
+flowchart LR
+    subgraph local["Local development"]
+        source["Python source + requirements.txt<br/>Dockerfile + .dockerignore"]
+        env["Local .env<br/>OPENAI_API_KEY, TAVILY_API_KEY<br/>Optional OPENAI_MODEL"]
+        dev["Local Python or Docker process<br/>Same cloud-accessible LLM backend"]
+        build["Docker multi-stage build<br/>linux/amd64"]
+        image["Container image<br/>Python 3.13 + Node.js 22<br/>MCP servers installed during build"]
+        shell["Shell environment variables<br/>set -a; source .env; set +a"]
+    end
+    registry["Artifact Registry<br/>Container image repository"]
+    deploy["gcloud run deploy<br/>--image registry-image<br/>--update-env-vars from shell variables<br/>Preserve existing secret references"]
+    secrets["Secret Manager<br/>Existing OpenAI and Tavily key references"]
+    subgraph cloud["Google Cloud Run"]
+        service["Service container<br/>Non-root UID 10001<br/>Uvicorn: one worker<br/>0.0.0.0:$PORT"]
+        port["Cloud Run injects PORT"]
+        url["Live HTTPS URL<br/>hw1-agent-2pfqauay5a-uw.a.run.app"]
+    end
+    openai["OpenAI API"]
+    search["Tavily remote MCP"]
+
+    source --> dev
+    env -->|"python-dotenv / docker --env-file"| dev
+    source --> build
+    build --> image
+    image -->|"push"| registry
+    registry -->|"image reference"| deploy
+    env --> shell
+    shell -->|"runtime configuration"| deploy
+    deploy --> service
+    secrets -->|"inject API keys at startup"| service
+    port --> service
+    service -->|"HTTPS endpoint"| url
+    dev <-->|"LLM requests and responses"| openai
+    service <-->|"LLM requests and responses"| openai
+    dev <-->|"MCP over HTTPS"| search
+    service <-->|"MCP over HTTPS"| search

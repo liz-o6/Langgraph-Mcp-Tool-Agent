@@ -1,0 +1,15 @@
+# Only application source and dependency metadata enter the build context.
+**
+!Dockerfile
+!requirements.txt
+!agent.py
+!app/
+!app/**
+!integrations/
+!integrations/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+**/*.pem
+**/*.key

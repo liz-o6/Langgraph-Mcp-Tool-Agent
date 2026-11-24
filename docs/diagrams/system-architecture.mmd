@@ -1,0 +1,37 @@
+flowchart TB
+    user["Client / Swagger UI"]
+    llm["OpenAI API<br/>OPENAI_MODEL; default: gpt-5"]
+    tavily["Tavily Search MCP<br/>Remote HTTPS server"]
+
+    subgraph runtime["Cloud Run instance - one application worker"]
+        api["FastAPI POST /chat<br/>query + session_id"]
+        service["AgentService<br/>Serialize requests within each session"]
+        startup["FastAPI lifespan<br/>available_tools: one task per MCP connection"]
+        subgraph agentGraph["LangGraph StateGraph - AgentState.messages"]
+            chat["chat node<br/>Model invocation and tool selection"]
+            tools["tools node<br/>ToolNode + timeout + error handling"]
+        end
+        memory["InMemorySaver<br/>Checkpoints keyed by thread_id"]
+        adapter["MCP client wrapper<br/>langchain-mcp-adapters + ClientSession"]
+        fs["Filesystem MCP<br/>Node.js subprocess"]
+        time["Time MCP<br/>Python subprocess"]
+        files["/app/workspace/files<br/>Instance-local files"]
+    end
+
+    user -->|"HTTP request"| api
+    api --> service
+    service -->|"query; session_id maps to thread_id"| chat
+    chat <-->|"messages and model response"| llm
+    chat -->|"tool_calls"| tools
+    tools -->|"ToolMessage results"| chat
+    chat -->|"final message"| service
+    service -->|"response + session_id"| api
+    api -->|"HTTP response"| user
+    agentGraph <-->|"restore and checkpoint state"| memory
+    startup -.->|"open and retain sessions"| adapter
+    startup -.->|"compile shared graph"| agentGraph
+    tools <-->|"invoke tool / return result"| adapter
+    adapter <-->|"stdio: tools/list and tools/call"| fs
+    adapter <-->|"stdio: tools/list and tools/call"| time
+    adapter <-->|"HTTPS: tools/list and tools/call"| tavily
+    fs <-->|"read and write within allowed root"| files

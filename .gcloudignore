@@ -1,0 +1,16 @@
+# Only these files are uploaded to Cloud Build. Keep secrets local.
+**
+!.dockerignore
+!Dockerfile
+!requirements.txt
+!agent.py
+!app/
+!app/**
+!integrations/
+!integrations/**
+**/__pycache__/
+**/*.pyc
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
